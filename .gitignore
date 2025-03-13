@@ -1,0 +1,42 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+.env
+.Python
+
+# Distribution / packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Poetry files
+.poetry/
+.poetry-cache/
+
+# IDE and editor specific files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Environment variable files (contains sensitive information)
+.env
