@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Chat with LLM</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+      }
+      .chat-box {
+        border: 1px solid #ccc;
+        padding: 10px;
+        height: 400px;
+        overflow-y: scroll;
+      }
+      .message {
+        margin-bottom: 10px;
+      }
+      .user {
+        color: blue;
+      }
+      .assistant {
+        color: green;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Chat with LLM</h1>
+    <div class="chat-box">
+      {% for msg in chat_history %}
+      <div class="message {{ msg.role }}">
+        <strong>{{ msg.role.capitalize() }}:</strong> {{ msg.content }}
+      </div>
+      {% endfor %}
+    </div>
+    <form method="POST">
+      <input
+        type="text"
+        name="message"
+        placeholder="Type your message here..."
+        style="width: 80%"
+        required
+      />
+      <button type="submit">Send</button>
+    </form>
+  </body>
+</html>

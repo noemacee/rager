@@ -20,6 +20,7 @@ def create_text_generator(model_id, cache_dir="model_cache"):
     model = AutoModelForCausalLM.from_pretrained(
         model_id, torch_dtype=torch.bfloat16, device_map="auto", cache_dir=cache_dir
     )
+    model = model.to("mps")
     generator = pipeline("text-generation", model=model, tokenizer=tokenizer)
     print("Text-generation model loaded.\n")
     return generator
