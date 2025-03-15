@@ -40,3 +40,6 @@ Thumbs.db
 
 # Environment variable files (contains sensitive information)
 .env
+
+#models
+model_cache/
