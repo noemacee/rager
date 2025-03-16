@@ -1,22 +1,25 @@
+from langchain_huggingface import HuggingFacePipeline
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
+from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline as hf_pipeline
 import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
-import pinecone
-from pinecone import Pinecone, ServerlessSpec
-from sentence_transformers import SentenceTransformer
 from dotenv import load_dotenv
-import os
-from os import environ as env
 
 load_dotenv()
 
 
-def create_text_generator(model_id, cache_dir="model_cache"):
+def create_langchain_llm(
+    model_id="meta-llama/Llama-3.2-3B-Instruct", cache_dir="model_cache"
+):
     """
-    Loads the model and tokenizer using a cache directory and
-    returns a text-generation pipeline.
+    Loads a Hugging Face model into a LangChain-compatible LLM.
     """
-    print("Loading text-generation model and tokenizer...")
-    device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+    device = torch.device(
+        "mps"
+        if torch.backends.mps.is_available()
+        else "cuda" if torch.cuda.is_available() else "cpu"
+    )
+
     tokenizer = AutoTokenizer.from_pretrained(model_id, cache_dir=cache_dir)
     model = AutoModelForCausalLM.from_pretrained(
         model_id,
@@ -24,54 +27,47 @@ def create_text_generator(model_id, cache_dir="model_cache"):
         device_map={"": device} if device.type == "mps" else "auto",
         cache_dir=cache_dir,
     )
-    generator = pipeline("text-generation", model=model, tokenizer=tokenizer)
-    print("Text-generation model loaded.\n")
-    return generator
 
-
-def generate_response(
-    generator, messages, max_new_tokens=256, temperature=0.7, top_p=0.9
-):
-    """
-    Generates a text response given conversation messages.
-    Prints the prompt, raw output, and extracts the answer.
-    Handles both string and list outputs.
-    """
-    print("Generating response with prompt:")
-    for m in messages:
-        print(f"  {m['role']}: {m['content']}")
-
-    outputs = generator(
-        messages, max_new_tokens=max_new_tokens, temperature=temperature, top_p=top_p
+    pipe = hf_pipeline(
+        "text-generation",
+        model=model,
+        tokenizer=tokenizer,
+        device=0 if device.type != "mps" else None,
+        max_new_tokens=256,  # Moved here
+        temperature=0.7,  # Moved here
+        top_p=0.9,  # Moved here
     )
-    print("\nRaw generator output:")
-    print(outputs)
 
-    # Attempt to extract the generated text.
-    if isinstance(outputs, list) and outputs:
-        raw_text = outputs[0].get("generated_text")
-        # Case 1: raw_text is a string.
-        if isinstance(raw_text, str):
-            if "Answer:" in raw_text:
-                answer = raw_text.split("Answer:", 1)[1].strip()
-            else:
-                answer = raw_text.strip()
-            print("\nExtracted Answer:")
-            print(answer)
-            return answer
-        # Case 2: raw_text is a list (e.g., list of messages).
-        elif isinstance(raw_text, list):
-            for msg in raw_text:
-                if msg.get("role") == "assistant":
-                    answer = msg.get("content", "").strip()
-                    print("\nExtracted Answer:")
-                    print(answer)
-                    return answer
-            # Fallback: join all messages' content.
-            combined = " ".join(msg.get("content", "") for msg in raw_text)
-            print("\nExtracted Answer by concatenation:")
-            print(combined)
-            return combined
-    else:
-        print("No output generated.")
-        return ""
+    llm = HuggingFacePipeline(pipeline=pipe)  # Pass params inside pipeline, not here
+
+    print("LangChain LLM loaded.\n")
+    return llm
+
+
+from langchain_core.prompts import ChatPromptTemplate
+
+
+from langchain_core.prompts import ChatPromptTemplate
+
+
+def generate_response_llm(llm, system_prompt, user_query, document_text):
+    """
+    Generates a structured response using LangChain-compatible LLM.
+    """
+    prompt_template = ChatPromptTemplate.from_messages(
+        [
+            ("system", system_prompt),  # Ensure system instructions are followed
+            ("user", f"Query: {user_query}"),  # Only include the user’s question
+            (
+                "assistant",
+                "Respond concisely. Do not repeat details. Only answer the query.",
+            ),
+            ("human", f"Relevant Blockchain Data:\n{document_text}"),
+        ]
+    )
+
+    formatted_prompt = prompt_template.format()
+    print("🔍 Debugging Prompt Sent to LLM:\n", formatted_prompt)  # Debugging step
+
+    response = llm.invoke(formatted_prompt)  # Ensures structured LLM response
+    return response.strip()

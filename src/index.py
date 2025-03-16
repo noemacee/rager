@@ -1,21 +1,35 @@
-import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
-import pinecone
-from pinecone import Pinecone, ServerlessSpec
-from sentence_transformers import SentenceTransformer
-from dotenv import load_dotenv
+########################################
+# index.py
+########################################
 import os
 from os import environ as env
+from pinecone import Pinecone, ServerlessSpec
+
+# Make sure to have `langchain-huggingface` installed
+from langchain_pinecone import PineconeVectorStore
+
+from langchain_huggingface import HuggingFaceEmbeddings
+
+
+import os
+from pinecone import Pinecone, ServerlessSpec
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_pinecone import Pinecone as LCPinecone
+from dotenv import load_dotenv
 
 load_dotenv()
 
 
-def create_pinecone_index(index_name, dimension, pinecone_api_key, region):
-    """
-    Initializes Pinecone using the new API and creates an index if it does not exist.
-    """
-    print("Initializing Pinecone and creating/loading index...")
+def create_pinecone_index(index_name, dimension=384):
+    print("Initializing Pinecone with the new recommended usage...")
+
+    pinecone_api_key = os.environ.get("PINECONE_API_KEY")
+    pinecone_region = os.environ.get("PINECONE_REGION")  # e.g. "us-west-2"
+
+    # Create the new Pinecone client
     pc = Pinecone(api_key=pinecone_api_key)
+
+    # Create index if needed
     existing_indexes = pc.list_indexes().names()
     print(f"Existing indexes: {existing_indexes}")
     if index_name not in existing_indexes:
@@ -26,86 +40,63 @@ def create_pinecone_index(index_name, dimension, pinecone_api_key, region):
             metric="cosine",
             spec=ServerlessSpec(
                 cloud="aws",
-                region=region,
+                region=pinecone_region,
             ),
         )
         print("Index created.")
     else:
         print(f"Index '{index_name}' already exists.")
-    index = pc.Index(index_name)
+
+    # Retrieve the Pinecone index
+    pinecone_index = pc.Index(index_name)
     print("Pinecone index loaded.\n")
-    return index
+
+    embedding = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+    vectorstore = PineconeVectorStore(index=pinecone_index, embedding=embedding)
+
+    return vectorstore
 
 
-def embed_text(text, embedder):
+def embed_text(text):
     """
-    Converts a piece of text into an embedding vector.
+    Embeds text using LangChain's HuggingFace embeddings.
     """
-    if not isinstance(text, str):
-        text = str(text)
-    vector = embedder.encode(text).tolist()
-    print(f"Embedded text: '{text[:50]}...' to vector of length {len(vector)}")
-    return vector
+    embedder = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+    return embedder.embed_query(text)
 
 
-def simulate_blockchain_data_availability(transaction_hash, merkle_root):
-    """
-    Simulate retrieval of blockchain data availability proof.
-    """
-    simulated_proof = f"Simulated_Cairo_Proof_for_{transaction_hash}"
-    data = {
-        "merkle_root": merkle_root,
-        "transaction_hash": transaction_hash,
-        "proof": simulated_proof,
-        "status": "verified",
-        "block_number": 12345,
-        "timestamp": 1630000000,
-    }
-    print(f"Simulated blockchain data for {transaction_hash}: {data}")
-    return data
-
-
-def fill_index_with_blockchain_data(index, embedder, data_items):
+def fill_index_with_blockchain_data(index, data_items):
     """
     Fills the Pinecone index with blockchain data availability records.
     """
-    vectors = []
+    texts = []
+    metadatas = []
+
     for item in data_items:
         text_for_embedding = (
             f"Merkle Root: {item['merkle_root']}. "
             f"Transaction: {item['transaction_hash']}. "
             f"Proof: {item['proof']}. "
             f"Status: {item['status']}."
-            f"Block Number: {item['block_number']}."
+            f"Block Number: {item['block_number']}. "
             f"Timestamp: {item['timestamp']}."
         )
-        vector = embed_text(text_for_embedding, embedder)
-        vectors.append(
+
+        texts.append(text_for_embedding)
+        metadatas.append(
             {
-                "id": item["merkle_root"],
-                "values": vector,
-                "metadata": item,
+                "merkle_root": item["merkle_root"],
+                "transaction_hash": item["transaction_hash"],
+                "proof": item["proof"],
+                "status": item["status"],
+                "block_number": item["block_number"],
+                "timestamp": item["timestamp"],
             }
         )
-        print(f"Prepared vector for transaction {item['merkle_root']}")
-    upsert_response = index.upsert(vectors=vectors)
-    print("Pinecone Upsert Response:", upsert_response, "\n")
 
+        print(f"Prepared vector for transaction {item['transaction_hash']}")
 
-def populate_index_with_blockchain_data_bulk(
-    index, embedder, transaction_hashes, merkle_roots
-):
-    """
-    Populates the Pinecone index with blockchain data availability records
-    for a list of transaction hashes.
-    """
-    print("Populating index with blockchain data...")
-    data_items = []
-    for tx_hash in transaction_hashes:
-        for merkle_root in merkle_roots:
-            blockchain_data = simulate_blockchain_data_availability(
-                tx_hash, merkle_root
-            )
-            data_items.append(blockchain_data)
-    fill_index_with_blockchain_data(index, embedder, data_items)
-    print("Index population complete.\n")
+    # 🔥 Use `add_texts()` instead of `upsert()`
+    index.add_texts(texts=texts, metadatas=metadatas)
+
+    print("\n✅ Pinecone Index Updated Successfully!\n")
