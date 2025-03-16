@@ -5,6 +5,7 @@ from llm import (
 )  # Adjust imports as needed
 from dotenv import load_dotenv
 import os
+from flask import jsonify, request
 
 load_dotenv()
 
@@ -42,6 +43,20 @@ def chat():
         return redirect(url_for("chat"))
 
     return render_template("chat.html", chat_history=chat_history)
+
+
+@app.route("/get_response", methods=["POST"])
+def get_response():
+    data = request.get_json()
+    user_message = data.get("message")
+    prompt_messages = [
+        {"role": "system", "content": "You are a helpful chatbot."},
+        {"role": "user", "content": user_message},
+    ]
+    response = generate_response(generator, prompt_messages, max_new_tokens=256)
+    # Optionally, update chat_history if you need to persist it
+    chat_history.append({"role": "assistant", "content": response})
+    return jsonify({"response": response})
 
 
 if __name__ == "__main__":

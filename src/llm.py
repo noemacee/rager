@@ -16,11 +16,14 @@ def create_text_generator(model_id, cache_dir="model_cache"):
     returns a text-generation pipeline.
     """
     print("Loading text-generation model and tokenizer...")
+    device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
     tokenizer = AutoTokenizer.from_pretrained(model_id, cache_dir=cache_dir)
     model = AutoModelForCausalLM.from_pretrained(
-        model_id, torch_dtype=torch.bfloat16, device_map="auto", cache_dir=cache_dir
+        model_id,
+        torch_dtype=torch.bfloat16,
+        device_map={"": device} if device.type == "mps" else "auto",
+        cache_dir=cache_dir,
     )
-    model = model.to("mps")
     generator = pipeline("text-generation", model=model, tokenizer=tokenizer)
     print("Text-generation model loaded.\n")
     return generator

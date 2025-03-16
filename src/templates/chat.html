@@ -1,48 +1,133 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
   <head>
     <meta charset="UTF-8" />
-    <title>Chat with LLM</title>
+    <title>Chat</title>
     <style>
       body {
         font-family: Arial, sans-serif;
-        margin: 20px;
+        background: #f2f2f2;
+        margin: 0;
+        padding: 20px;
       }
-      .chat-box {
-        border: 1px solid #ccc;
+      #chat-box {
+        max-width: 600px;
+        margin: 0 auto 20px auto;
         padding: 10px;
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        overflow-y: auto;
         height: 400px;
-        overflow-y: scroll;
-      }
-      .message {
-        margin-bottom: 10px;
       }
       .user {
-        color: blue;
+        background: #d0eaff;
+        color: #003366;
+        padding: 8px 12px;
+        margin: 6px;
+        border-radius: 8px;
+        text-align: right;
+        align-self: flex-end;
+        max-width: 70%;
       }
       .assistant {
-        color: green;
+        background: #e0ffe0;
+        color: #004400;
+        padding: 8px 12px;
+        margin: 6px;
+        border-radius: 8px;
+        text-align: left;
+        align-self: flex-start;
+        max-width: 70%;
+      }
+      #chat-form {
+        max-width: 600px;
+        margin: 0 auto;
+        display: flex;
+      }
+      #userMessage {
+        flex: 1;
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font-size: 1em;
+      }
+      #chat-form button {
+        padding: 10px 20px;
+        margin-left: 10px;
+        border: none;
+        border-radius: 4px;
+        background-color: #4caf50;
+        color: white;
+        font-size: 1em;
+        cursor: pointer;
+      }
+      #chat-form button:hover {
+        background-color: #45a049;
       }
     </style>
   </head>
   <body>
-    <h1>Chat with LLM</h1>
-    <div class="chat-box">
+    <div id="chat-box">
       {% for msg in chat_history %}
-      <div class="message {{ msg.role }}">
-        <strong>{{ msg.role.capitalize() }}:</strong> {{ msg.content }}
-      </div>
+      <div class="{{ msg.role }}">{{ msg.content }}</div>
       {% endfor %}
     </div>
-    <form method="POST">
+
+    <form id="chat-form">
       <input
         type="text"
+        id="userMessage"
         name="message"
-        placeholder="Type your message here..."
-        style="width: 80%"
+        placeholder="Type your message..."
         required
       />
       <button type="submit">Send</button>
     </form>
+
+    <script>
+      document
+        .getElementById("chat-form")
+        .addEventListener("submit", function (e) {
+          e.preventDefault();
+          const messageInput = document.getElementById("userMessage");
+          const message = messageInput.value;
+
+          // Immediately add user's message to chat
+          const chatBox = document.getElementById("chat-box");
+          const userDiv = document.createElement("div");
+          userDiv.className = "user";
+          userDiv.textContent = message;
+          chatBox.appendChild(userDiv);
+
+          // Add a placeholder for assistant's response
+          const assistantDiv = document.createElement("div");
+          assistantDiv.className = "assistant";
+          assistantDiv.textContent = "Loading...";
+          chatBox.appendChild(assistantDiv);
+
+          // Clear the input field
+          messageInput.value = "";
+
+          // Scroll to bottom of chat box
+          chatBox.scrollTop = chatBox.scrollHeight;
+
+          // Send AJAX POST to get the assistant's response
+          fetch("/get_response", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message: message }),
+          })
+            .then((response) => response.json())
+            .then((data) => {
+              assistantDiv.textContent = data.response;
+              chatBox.scrollTop = chatBox.scrollHeight;
+            })
+            .catch((error) => {
+              assistantDiv.textContent = "Error getting response.";
+              console.error(error);
+            });
+        });
+    </script>
   </body>
 </html>
