@@ -20,28 +20,9 @@ generator = create_text_generator(MODEL_ID, cache_dir=CACHE_DIR)
 chat_history = []
 
 
-@app.route("/", methods=["GET", "POST"])
-def chat():
+@app.route("/")
+def home():
     global chat_history
-    if request.method == "POST":
-        user_message = request.form.get("message")
-        if user_message:
-            # Append user message to chat history
-            chat_history.append({"role": "user", "content": user_message})
-
-            # Build a simple prompt from the conversation
-            # For a more advanced version, you can pass the entire chat history
-            prompt_messages = [
-                {"role": "system", "content": "You are a helpful chatbot."},
-                {"role": "user", "content": user_message},
-            ]
-            response = generate_response(generator, prompt_messages, max_new_tokens=256)
-
-            # Append the generated answer
-            chat_history.append({"role": "assistant", "content": response})
-
-        return redirect(url_for("chat"))
-
     return render_template("chat.html", chat_history=chat_history)
 
 
@@ -49,13 +30,19 @@ def chat():
 def get_response():
     data = request.get_json()
     user_message = data.get("message")
+
+    # Build your prompt or use the conversation
     prompt_messages = [
         {"role": "system", "content": "You are a helpful chatbot."},
         {"role": "user", "content": user_message},
     ]
+    # Generate response with your LLM
     response = generate_response(generator, prompt_messages, max_new_tokens=256)
-    # Optionally, update chat_history if you need to persist it
+
+    # Optionally store in chat_history
+    chat_history.append({"role": "user", "content": user_message})
     chat_history.append({"role": "assistant", "content": response})
+
     return jsonify({"response": response})
 
 

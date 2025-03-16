@@ -4,59 +4,107 @@
     <meta charset="UTF-8" />
     <title>Chat</title>
     <style>
-      body {
-        font-family: Arial, sans-serif;
-        background: #f2f2f2;
+      /* Basic reset */
+      * {
         margin: 0;
-        padding: 20px;
+        padding: 0;
+        box-sizing: border-box;
       }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue",
+          Arial, sans-serif;
+        background: #ffffff;
+        color: #333;
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+      }
+
+      /* Header area */
+      .header {
+        text-align: center;
+        padding: 40px 20px 20px;
+      }
+      .header h1 {
+        font-weight: normal;
+        font-size: 2rem;
+        margin-bottom: 10px;
+      }
+
+      /* Main chat container */
+      .chat-container {
+        flex: 1; /* fills available vertical space */
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        max-width: 800px;
+        margin: 0 auto;
+        width: 100%;
+      }
+
+      /* Scrollable chat box */
       #chat-box {
+        flex: 1;
+        width: 100%;
         max-width: 600px;
-        margin: 0 auto 20px auto;
-        padding: 10px;
-        background: #fff;
+        margin: 0 auto;
+        padding: 20px;
         border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        background: #f9f9f9;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
         overflow-y: auto;
-        height: 400px;
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* Chat message bubbles */
+      .message {
+        display: inline-block;
+        margin: 8px 0;
+        padding: 12px 16px;
+        border-radius: 8px;
+        max-width: 70%;
+        line-height: 1.4;
+        white-space: pre-wrap; /* preserve line breaks */
+        word-wrap: break-word; /* wrap long text */
       }
       .user {
         background: #d0eaff;
         color: #003366;
-        padding: 8px 12px;
-        margin: 6px;
-        border-radius: 8px;
+        align-self: flex-end; /* push user message to the right */
         text-align: right;
-        align-self: flex-end;
-        max-width: 70%;
       }
       .assistant {
         background: #e0ffe0;
         color: #004400;
-        padding: 8px 12px;
-        margin: 6px;
-        border-radius: 8px;
+        align-self: flex-start; /* push assistant message to the left */
         text-align: left;
-        align-self: flex-start;
-        max-width: 70%;
       }
+
+      /* The form at the bottom for user input */
       #chat-form {
+        width: 100%;
         max-width: 600px;
-        margin: 0 auto;
+        margin: 20px auto;
         display: flex;
+        align-items: center;
+        padding: 0 20px;
       }
       #userMessage {
         flex: 1;
-        padding: 10px;
+        padding: 12px;
         border: 1px solid #ccc;
-        border-radius: 4px;
+        border-radius: 24px;
         font-size: 1em;
+        outline: none;
       }
       #chat-form button {
-        padding: 10px 20px;
         margin-left: 10px;
+        padding: 12px 20px;
         border: none;
-        border-radius: 4px;
+        border-radius: 24px;
         background-color: #4caf50;
         color: white;
         font-size: 1em;
@@ -65,46 +113,75 @@
       #chat-form button:hover {
         background-color: #45a049;
       }
+
+      /* Footer disclaimers, etc. */
+      .footer-text {
+        text-align: center;
+        font-size: 12px;
+        color: #888;
+        margin: 10px 0 20px 0;
+      }
     </style>
   </head>
   <body>
-    <div id="chat-box">
-      {% for msg in chat_history %}
-      <div class="{{ msg.role }}">{{ msg.content }}</div>
-      {% endfor %}
+    <!-- Header / Title -->
+    <div class="header">
+      <h1>What can I help with?</h1>
     </div>
 
-    <form id="chat-form">
-      <input
-        type="text"
-        id="userMessage"
-        name="message"
-        placeholder="Type your message..."
-        required
-      />
-      <button type="submit">Send</button>
-    </form>
+    <!-- Main chat container -->
+    <div class="chat-container">
+      <!-- Scrollable chat messages -->
+      <div id="chat-box">
+        {% for msg in chat_history %}
+        <div class="message {{ msg.role }}">{{ msg.content }}</div>
+        {% endfor %}
+      </div>
 
+      <!-- Chat input form -->
+      <form id="chat-form">
+        <input
+          type="text"
+          id="userMessage"
+          name="message"
+          placeholder="Type your message..."
+          required
+        />
+        <button type="submit">Send</button>
+      </form>
+    </div>
+
+    <!-- Optional footer text -->
+    <div class="footer-text">
+      Rager can make mistakes. Check important info.
+    </div>
+
+    <!-- JavaScript to handle sending messages and updating chat -->
     <script>
       document
         .getElementById("chat-form")
         .addEventListener("submit", function (e) {
           e.preventDefault();
           const messageInput = document.getElementById("userMessage");
-          const message = messageInput.value;
+          const message = messageInput.value.trim();
 
-          // Immediately add user's message to chat
+          // If empty, do nothing
+          if (!message) return;
+
+          // Grab the chat box element
           const chatBox = document.getElementById("chat-box");
-          const userDiv = document.createElement("div");
-          userDiv.className = "user";
-          userDiv.textContent = message;
-          chatBox.appendChild(userDiv);
 
-          // Add a placeholder for assistant's response
-          const assistantDiv = document.createElement("div");
-          assistantDiv.className = "assistant";
-          assistantDiv.textContent = "Loading...";
-          chatBox.appendChild(assistantDiv);
+          // 1. Immediately add the user's message to the chat
+          const userMsg = document.createElement("div");
+          userMsg.className = "message user";
+          userMsg.textContent = message;
+          chatBox.appendChild(userMsg);
+
+          // 2. Create a placeholder for the assistant's response
+          const assistantMsg = document.createElement("div");
+          assistantMsg.className = "message assistant";
+          assistantMsg.textContent = "Loading...";
+          chatBox.appendChild(assistantMsg);
 
           // Clear the input field
           messageInput.value = "";
@@ -112,7 +189,7 @@
           // Scroll to bottom of chat box
           chatBox.scrollTop = chatBox.scrollHeight;
 
-          // Send AJAX POST to get the assistant's response
+          // 3. Send AJAX POST to get the assistant's response
           fetch("/get_response", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -120,11 +197,11 @@
           })
             .then((response) => response.json())
             .then((data) => {
-              assistantDiv.textContent = data.response;
+              assistantMsg.textContent = data.response;
               chatBox.scrollTop = chatBox.scrollHeight;
             })
             .catch((error) => {
-              assistantDiv.textContent = "Error getting response.";
+              assistantMsg.textContent = "Error getting response.";
               console.error(error);
             });
         });
