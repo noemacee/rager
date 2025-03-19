@@ -21,6 +21,8 @@ def create_langchain_llm(
     )
 
     tokenizer = AutoTokenizer.from_pretrained(model_id, cache_dir=cache_dir)
+    tokenizer.pad_token = tokenizer.eos_token
+
     model = AutoModelForCausalLM.from_pretrained(
         model_id,
         torch_dtype=torch.bfloat16,
@@ -33,9 +35,12 @@ def create_langchain_llm(
         model=model,
         tokenizer=tokenizer,
         device=0 if device.type != "mps" else None,
-        max_new_tokens=256,  # Moved here
-        temperature=0.7,  # Moved here
-        top_p=0.9,  # Moved here
+        max_new_tokens=50,  # Moved here
+        temperature=0.0,  # Moved here
+        top_p=1.0,  # Moved here
+        do_sample=False,
+        eos_token_id=tokenizer.eos_token_id,
+        pad_token_id=tokenizer.pad_token_id,  # Explicitly define padding behavior
     )
 
     llm = HuggingFacePipeline(pipeline=pipe)  # Pass params inside pipeline, not here
@@ -50,24 +55,57 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.prompts import ChatPromptTemplate
 
 
-def generate_response_llm(llm, system_prompt, user_query, document_text):
+def generate_response_llm(llm, prompt):
     """
     Generates a structured response using LangChain-compatible LLM.
     """
-    prompt_template = ChatPromptTemplate.from_messages(
-        [
-            ("system", system_prompt),  # Ensure system instructions are followed
-            ("user", f"Query: {user_query}"),  # Only include the user’s question
-            (
-                "assistant",
-                "Respond concisely. Do not repeat details. Only answer the query.",
-            ),
-            ("human", f"Relevant Blockchain Data:\n{document_text}"),
-        ]
-    )
 
-    formatted_prompt = prompt_template.format()
-    print("🔍 Debugging Prompt Sent to LLM:\n", formatted_prompt)  # Debugging step
+    response = llm.invoke(prompt, do_sample=False)  # Ensures structured LLM response
 
-    response = llm.invoke(formatted_prompt)  # Ensures structured LLM response
-    return response.strip()
+    print("Raw Response:", response)
+
+    end_context = response.find("<<<END CONTEXT>>>")
+    start_response = response.find("<<<RESPONSE>>>", end_context)
+    end_response = response.find("<<<END RESPONSE>>>", start_response)
+
+    if start_response != -1 and end_response != -1:
+        answer = response[start_response + len("<<<RESPONSE>>>") : end_response].strip()
+    else:
+        answer = "ERROR: No valid response found."
+
+    print("Final Answer:", answer)
+
+    return answer
+
+
+def generate_rag_prompt(query: str, document: str) -> str:
+    """
+    Generates a structured prompt for the LLaMA-3.2-3B-Instruct model
+    using the retrieved Merkle tree data and the user query.
+
+    :param query: The user's query.
+    :param metadata: Dictionary containing the retrieved blockchain data.
+    :return: Formatted prompt string.
+    """
+
+    prompt = f"""
+        You are a blockchain expert. Your task is to answer ONLY the query provided by the user using only the context given. 
+        Do not include any extra text or restate the context or query.
+
+        Instructions:
+        1. Use ONLY the information provided in the context.
+        2. If you are not sure or the context does not have enough information, respond with "I don't know."
+        3. Output your final answer enclosed between the delimiters <<<RESPONSE>>> and <<<END RESPONSE>>>.
+        4. STOP IMMEDIATELY AFTER <<<END RESPONSE>>>. DO NOT GENERATE ANYTHING ELSE.
+
+        Context:
+        <<<CONTEXT>>>
+        {document}
+        <<<END CONTEXT>>>
+
+        Query:
+        <<<QUERY>>>
+        {query}
+        <<<END QUERY>>>
+    """
+    return prompt.strip()

@@ -1,6 +1,6 @@
 from langchain_core.vectorstores import VectorStoreRetriever
 from langchain_core.documents import Document
-from llm import generate_response_llm
+from llm import generate_response_llm, generate_rag_prompt
 
 from dotenv import load_dotenv
 
@@ -26,21 +26,16 @@ def retrieve_documents_and_rag(query, vectorstore, llm, top_k=1):
     metadata = best_match.metadata
 
     document = (
-        f"Merkle Root: {metadata.get('merkle_root', '')}. "
-        f"Transaction: {metadata.get('transaction_hash', '')}. "
-        f"Proof: {metadata.get('proof', '')}. "
-        f"Status: {metadata.get('status', '')}. "
-        f"Block Number: {metadata.get('block_number', '')}. "
-        f"Timestamp: {metadata.get('timestamp', '')}."
+        f"The Merkle Root is{metadata.get('merkle_root', '')}. "
+        f"The Transaction id is {metadata.get('transaction_hash', '')}. "
+        f"The Proof associated to the transaction in the root is {metadata.get('proof', '')}. "
+        f"The Status of the transaction of the proof {metadata.get('status', '')}. "
+        f"The Block Number associated to the merkle root {metadata.get('block_number', '')}. "
+        f"The Timestamp associated to the merkle root {metadata.get('timestamp', '')}."
     )
 
-    system_prompt = (
-        "You are a blockchain expert. Respond ONLY to the user's query. "
-        "DO NOT explain concepts unless asked. "
-        "DO NOT repeat blockchain data. "
-        "If the user asks for a Merkle root, return ONLY the root."
-    )
+    prompt = generate_rag_prompt(query, document)
 
-    response_text = generate_response_llm(llm, system_prompt, query, document)
+    response_text = generate_response_llm(llm, prompt)
 
     return response_text, document
