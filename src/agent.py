@@ -1,53 +1,89 @@
 import os
+import getpass
 from dotenv import load_dotenv
-from langchain.agents import initialize_agent, Tool
-from langchain.agents.agent_types import AgentType
-from langchain_community.tools.python.tool import PythonREPLTool
-from langchain_community.tools.requests.tool import RequestsGetTool
-from langchain.tools import tool
-from your_smart_contract_tools import verify_merkle_proof
 
-load_dotenv()
+from langchain.agents import initialize_agent, AgentType, Tool
+from langchain_openai import ChatOpenAI
+
+from tools.direct_retrieve import direct_retrieval
+from tools.fuzzy_retrieve import fuzzy_retrieval
+from tools.merkle_verify import verify_merkle_tree
+
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 
-# 1. Define your custom verification tool (wrap Cairo smart contract call)
-@tool
-def verify_merkle_tool(leaf: str, root: str, proof: list[str]) -> str:
+def create_chat_llm():
     """
-    Verify if a Merkle proof is valid for a given leaf and root using a Cairo smart contract.
-    Input: leaf (str), root (str), proof (list of hex strings)
-    Output: "valid" or "invalid"
+    Creates a ChatOpenAI model with 'gpt-4o-mini' from OpenAI.
     """
-    try:
-        is_valid = verify_merkle_proof(leaf, root, proof)
-        return "valid" if is_valid else "invalid"
-    except Exception as e:
-        return f"Error: {str(e)}"
+    openai_key = os.getenv("OPENAI_API_KEY")
+    llm = ChatOpenAI(
+        model="gpt-4o-mini",
+        openai_api_key=openai_key,
+        temperature=0.0,
+    )
+    print("Loaded GPT-4o-mini via ChatOpenAI.\n")
+    return llm
 
 
-# 2. Prepare LangChain-compatible LLM (you already have it)
-from transformer import create_langchain_llm  # Assuming your code is in transformer.py
+PREFIX = """You are an AI assistant that uses tools to answer user questions.
+Your goal is to always provide a 'Final Answer' after gathering the necessary data.
+Prefer calling 'direct_retrieval' if you are looking for a specific transaction hash or Merkle root.
+If 'direct_retrieval' returns no results, you may try 'fuzzy_retrieval' to find approximate matches.
+After retrieving data with any tool, always use 'verify_merkle_tree' to validate Merkle proofs.
 
-llm = create_langchain_llm()
+Use the following format exactly:
+Question: {input}
+Thought: your step-by-step reasoning
+Action: [direct_retrieval|fuzzy_retrieval|verify_merkle_tree]
+Action Input: the input to the tool
+Observation: the result of the tool
+... (repeat Thought/Action/Observation if needed) ...
+Thought: now you know the final answer
+Final Answer: <final answer here>
+"""
+SUFFIX = """Begin!"""
 
-# 3. Define tools for the agent
-tools = [
-    Tool(
-        name="VerifyMerkleProof",
-        func=verify_merkle_tool,
-        description="Use to verify a Merkle proof given a leaf, root, and proof list.",
-    ),
-    PythonREPLTool(),  # optional
-    RequestsGetTool(),  # optional for web scraping
-]
 
-# 4. Create the agent
-agent = initialize_agent(
-    tools=tools, llm=llm, agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION, verbose=True
-)
+def run_agent(query: str):
+    llm = create_chat_llm()
 
-# 5. Example usage
-response = agent.run(
-    "Verify whether leaf 0xabc... belongs to root 0x123... using proof [0xaaa, 0xbbb, 0xccc]"
-)
-print("Agent Response:", response)
+    tools = [
+        Tool(
+            name="fuzzy_retrieval",
+            func=fuzzy_retrieval,
+            description="Fuzzy semantic retrieval over documents.",
+        ),
+        Tool(
+            name="direct_retrieval",
+            func=direct_retrieval,
+            description="Exact keyword-based retrieval over documents.",
+        ),
+        Tool(
+            name="verify_merkle_tree",
+            func=verify_merkle_tree,
+            description="Verify Merkle tree correctness using a smart contract.",
+        ),
+    ]
+
+    agent = initialize_agent(
+        tools=tools,
+        llm=llm,
+        agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
+        verbose=True,
+        max_iterations=5,
+        handle_parsing_errors=True,
+        agent_kwargs={
+            "prefix": PREFIX,
+            "suffix": SUFFIX,
+        },
+    )
+
+    result = agent.run(query)
+    return result
+
+
+if __name__ == "__main__":
+    print("Running agent...\n")
+    response = run_agent("Verify transaction 0x111")
+    print("\nRESULT:\n", response)
